@@ -18,4 +18,5 @@ module.exports = {
     roots: ['./tests'],
 
     collectCoverageFrom: ['./**/*.js'],
+    transform: {},
 };

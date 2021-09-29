@@ -2,7 +2,9 @@
 // cspell:words mockdate
 
 import 'regenerator-runtime/runtime';
+// require('regenerator-runtime/runtime');
 import MockDate from 'mockdate';
+// const MockDate = require('mockdate');
 
 process.on('unhandledRejection', error => {
     throw error;
@@ -41,15 +43,15 @@ class LocalStorageMock {
     }
 }
 
-global.localStorage = new LocalStorageMock();
+// global.localStorage = new LocalStorageMock();
 
-const originalDefine = customElements.define.bind(customElements);
+// const originalDefine = customElements.define.bind(customElements);
 
-customElements.define = function (name, ...rest) {
-    if (customElements.get(name)) {
-        console.warn(`Cannot re-register custom element "${name}"`);
-        return;
-    }
+// customElements.define = function (name, ...rest) {
+//     if (customElements.get(name)) {
+//         console.warn(`Cannot re-register custom element "${name}"`);
+//         return;
+//     }
 
-    originalDefine(name, ...rest);
-};
+//     originalDefine(name, ...rest);
+// };
