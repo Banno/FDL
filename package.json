@@ -1,0 +1,20 @@
+{
+  "name": "@jack-henry/FDL",
+  "version": "1.0.0",
+  "description": "Field Definition Language use to build policy's field types",
+  "main": "index.js",
+  "license": "apache-2.0",
+  "private": true,
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@babel/preset-env": "^7.15.6",
+    "jest": "^27.2.1",
+    "regenerator-runtime": "^0.13.9",
+    "mockdate": "^3.0.2"
+  }
+}
