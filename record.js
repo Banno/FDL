@@ -1,6 +1,3 @@
-/* eslint-disable @treasury/filename-match-export */
-// TODO rename this file to record.js (lowercase)
-
 import clone from './helpers/clone.js';
 import FieldType from './field-type.js';
 import Field from './field.js';
@@ -112,6 +109,16 @@ export default class Record extends EventTarget {
         return !this.hasErrors();
     }
 
+    get invalidValues() {
+        const invalidValues = [];
+        Object.keys(this.fieldTypes).forEach(key => {
+            if (!this.isValid(key)) {
+                invalidValues.push(key);
+            }
+        });
+        return invalidValues;
+    }
+
     hasRequiredValues() {
         return !Object.keys(this.fieldTypes).some(field => {
             const fieldTypeForField = this.fieldTypes[field];
@@ -144,6 +151,12 @@ export default class Record extends EventTarget {
         return this.fieldTypes[field] || new FieldType();
     }
 
+    addField(field, fieldType, value) {
+        this.fieldTypes = { ...this.fieldTypes, [field]: fieldType };
+        this.values = { ...this.values, [field]: value };
+        this.announceChange(field);
+    }
+
     /**
      *
      * @param {string} field
@@ -169,12 +182,17 @@ export default class Record extends EventTarget {
     }
 
     /**
-     *
+     * Gets the value of a field
      * @param {string} field
      */
     getField(field) {
         const parts = field.split('.');
         let target = this.values;
+        /*
+         This recursively gets nested object values,
+         returning the nested property until we traverse into the final
+         descendent
+        */
         while (parts.length > 1) {
             target = target[parts.shift()];
         }
@@ -191,7 +209,7 @@ export default class Record extends EventTarget {
 
     reset() {
         this.values = clone(this.initialValues);
-        this.announceChange();
+        Object.keys(this.values).map(field => this.announceChange(field));
     }
 
     allowInputChar(field, char) {
