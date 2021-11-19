@@ -189,7 +189,7 @@ export default class Recordset extends EventTarget {
                 this._.records = data.map(values => this.createRecord(values));
             } catch (error) {
                 // eslint-disable-next-line no-console
-                console.log(error);
+                console.error(error);
                 this._.isLoading = false;
                 this.dispatchEvent(
                     new CustomEvent('error', { bubbles: true, composed: true, detail: { error } })
@@ -257,7 +257,7 @@ export default class Recordset extends EventTarget {
     }
 
     notify() {
-        // checkbox-column calls notify, but it shouldn't be necessary
+        // keeping for testing purposes
     }
 
     createRecord(values) {
@@ -277,7 +277,8 @@ export default class Recordset extends EventTarget {
             return acc;
         }, {});
 
-        this.insertRecord(this.createRecord(values), this._.sortedFilteredRecords.length);
+        const rec = this.createRecord(values);
+        this.insertRecord(rec, this._.sortedFilteredRecords.length);
     }
 
     isLastRecord(record) {
@@ -312,8 +313,7 @@ export default class Recordset extends EventTarget {
     }
 
     insertRecord(record, index) {
-        this.listenTo(record, 'change', () => this.notify('updated'));
-        this._.records.push(record);
+        this._.records.splice(index + 1, 0, record);
         this._.sortedFilteredRecords.splice(index + 1, 0, record);
         this._.totalCount++;
         this._.extraRowCount++;
@@ -329,7 +329,6 @@ export default class Recordset extends EventTarget {
 
     stopListeningTo(target) {
         const indexesToRemove = [];
-
         this._.listeningTo
             .filter(l => l.target === target)
             .forEach((listener, index) => {
