@@ -1,6 +1,6 @@
 # FDL
 
-FDL, pronounced "fiddle", is a library developed by Jack Henry's Digital UX team to build complex forms and tables with many interdependent fields and validation rules.
+FDL, pronounced "fiddle", is a library developed by Jack Henry's Digital UX team to **build complex forms and tables with many interdependent fields and validation rules**.
 
 For example, let's say you're building a scheduling form for your dog walking business. It has four fields: name, date, new customer, and comments, with the following rules:
 
@@ -9,9 +9,9 @@ For example, let's say you're building a scheduling form for your dog walking bu
 - the date can be any Monday - Friday, excluding holidays, and new customers can only book on Friday
 - comments are optional, unless it's a new customer
 
-Traditionally we would put all of these rules in the HTML template, but that gets hairy quick. Then we try to move some of the business logic to the controller, and it still gets hard to maintain. (We're typically dealing with 10-20 fields with a lot more rules and the business constantly throwing us curve balls).
+**Traditionally we would put all of these rules in the HTML template**, but that gets hairy quick. Then we try to move some of the business logic to the controller, and it still gets hard to maintain. (We're typically dealing with 10-20 fields with a lot more rules and the business constantly throwing us curve balls).
 
-FDL is a powerful but easy to read domain specific language that corrals all of these business rules so the view code only has to worry about what field goes where.
+FDL is a powerful but easy to read **domain specific language** that corrals all of these business rules so **the view code only has to worry about what field goes where**.
 
 It looks something like this:
 
