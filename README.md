@@ -2,7 +2,9 @@
 
 FDL, pronounced "fiddle", is a library developed by Jack Henry's Digital UX team to **build complex forms and tables with many interdependent fields and validation rules**.
 
-For example, let's say you're building a scheduling form for your dog walking business. It has four fields: name, date, new customer, and comments, with the following rules:
+## Example: Dog Walking Service
+
+Let's say you're building a scheduling form for your dog walking business. It has four fields: name, date, new customer, and comments, with the following rules:
 
 - the name can be between 2 and 20 characters and should be capitalized when displayed (regardless of how it's input)
 - new customer is <del>a checkbox</del> <del>radio buttons</del> a checkbox that defaults to "yes" and becomes disabled if the name isn't recognized
@@ -59,6 +61,10 @@ function isExistingCustomerOrNewCustomerDay(record) {
 }
 ```
 
+## Docs
+
 In the above code, `string`, `boolean`, and `date` are all instances of [FieldType](./docs/fieldtype.md) class. They're connected to one another in a [Record](./docs/record.md). Not shown is a [Recordset](./docs/recordset.md), which we would use to present a list of appointments, with pagination, sorting, filtering, and specific rules around how those work for each field.
 
-_More to come!_
+## More to come
+
+Currently the best way to understand FDL is looking at how it's used in Jack Henry's internal codebase. We decided to open source the core as we believe it can be useful in other contexts.
