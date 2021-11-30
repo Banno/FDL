@@ -93,7 +93,7 @@ _Here be dragons. These functions exist, but they're not used anywhere yet and t
 
 ## Deprecated Functions
 
-_A field object (described at the top of this page) is a much more powerful abstraction that can do all fo the below and more._
+_A field object (described at the top of this page) is a much more powerful abstraction that can do all of the below and more._
 
 ### getField(fieldName)
 
