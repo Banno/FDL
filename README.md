@@ -63,7 +63,7 @@ function isExistingCustomerOrNewCustomerDay(record) {
 
 ## Docs
 
-In the above code, `string`, `boolean`, and `date` are all instances of [FieldType](./docs/fieldtype.md) class. They're connected to one another in a [Record](./docs/record.md). Not shown is a [Recordset](./docs/recordset.md), which we would use to present a list of appointments, with pagination, sorting, filtering, and specific rules around how those work for each field.
+In the above code, `string`, `boolean`, and `date` are all instances of [FieldType](./docs/field-type.md) class. They're connected to one another in a [Record](./docs/record.md). Not shown is a [Recordset](./docs/recordset.md), which we would use to present a list of appointments, with pagination, sorting, filtering, and specific rules around how those work for each field.
 
 ## More to come
 
