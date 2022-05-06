@@ -31,7 +31,9 @@ export default class Field extends EventTarget {
     }
 
     set value(inputValue) {
-        this.record.parseAndSetField(this.fieldName, inputValue);
+        if (inputValue !== this.rawValue) {
+            this.record.parseAndSetField(this.fieldName, inputValue);
+        }
         this.previousState.rawValue = this.rawValue;
     }
 

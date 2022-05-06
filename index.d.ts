@@ -4,5 +4,6 @@ import Field from './field.js';
 import Record from './record.js';
 import Recordset from './recordset.js';
 
-export { boolean, number, string, date, Record, Recordset, FieldType, Field };
+export { Field, FieldType, Record, Recordset, boolean, number, string, date };
+
 export * from './recordset.events';
