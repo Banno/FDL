@@ -68,6 +68,12 @@ describe('Record', () => {
         });
     });
 
+    it('recognizes when a field has been changed', () => {
+        expect(record.hasChanged).toEqual(false);
+        record.setField('name', 'Bobby');
+        expect(record.hasChanged).toEqual(true);
+    });
+
     describe('clone()', () => {
         const original = new Record(
             { role: new FieldType(), password: new FieldType() },
@@ -164,6 +170,12 @@ describe('Record', () => {
             const oldHash = changingRecord.hashOfFields([]);
             changingRecord.setField('c', 1000);
             expect(changingRecord.hashOfFields([])).toEqual(oldHash);
+        });
+    });
+
+    describe('getters', () => {
+        it('invalidValues - should return a list of invalid record values', () => {
+            expect(record.invalidValues).toEqual(['battingAverage']);
         });
     });
 });

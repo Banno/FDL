@@ -1,4 +1,5 @@
 import { nextFrame } from '@open-wc/testing'; // eslint-disable-line import/no-extraneous-dependencies
+import { deferTest as defer } from '@treasury/utils/testing';
 import FieldType from '../field-type.js';
 import Recordset from '../recordset.js';
 
@@ -7,7 +8,7 @@ function manyObjects(n) {
 }
 
 // eslint-disable-next-line no-unused-vars
-function numberNames(recordset) {
+function numberNames() {
     return [
         'one',
         'two',
@@ -37,6 +38,10 @@ function pluck(records, field) {
 }
 
 describe('Recordset', () => {
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
     describe('sync or async constructor', () => {
         it('loads synchronous data into records', async () => {
             const rs = new Recordset({}, () => [{ name: 'one' }, { name: 'two' }]);
@@ -125,7 +130,7 @@ describe('Recordset', () => {
         it('has the first page of records', async () => {
             const rs = new Recordset({}, numberNames);
             rs.pageSize = 3;
-            await nextFrame();
+            await rs.updating;
             expect(rs.currentPage.map(r => r.values.name)).toEqual(['one', 'two', 'three']);
         });
 
@@ -134,7 +139,7 @@ describe('Recordset', () => {
             rs.pageSize = 3;
             rs.pageNumber = 2;
 
-            await nextFrame();
+            await rs.updating;
             expect(rs.currentPage.map(r => r.values.name)).toEqual(['four', 'five', 'six']);
         });
 
@@ -142,27 +147,23 @@ describe('Recordset', () => {
             const rs = new Recordset({}, numberNames);
             rs.pageSize = 5;
             rs.pageNumber = 3;
-            await nextFrame();
+            await rs.updating;
             expect(rs.currentPage.map(r => r.values.name)).toEqual(['eleven', 'twelve']);
         });
 
-        it('does not call the fetch function again', async () => {
-            let timesFetchCalled = 0;
-            const rs = new Recordset({}, self => {
-                timesFetchCalled++;
-                return numberNames(self);
-            });
+        it('does not call the fetch function again after initial hydration', async () => {
+            const fetchSpy = jest.fn().mockImplementation(() => numberNames());
+            const rs = new Recordset({}, fetchSpy);
 
-            rs.requestUpdate();
-            await nextFrame();
+            await rs.requestUpdate();
 
             rs.pageNumber = 3;
-            await nextFrame();
+            await rs.updating;
 
             rs.pageNumber = 3;
-            await nextFrame();
+            await rs.updating;
 
-            expect(timesFetchCalled).toEqual(1);
+            expect(fetchSpy).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -170,7 +171,7 @@ describe('Recordset', () => {
         it('sets filtered count to equal total count when running server side filtering', async () => {
             const rs = new Recordset({}, numberNamesServerSide);
             rs.pageSize = 5;
-            await nextFrame();
+            await rs.updating;
             expect(rs.isServerSide).toEqual(true);
             expect(rs.filteredCount).toEqual(rs._.totalCount);
             expect(rs._.cursor.pageCount()).toEqual(3);
@@ -179,7 +180,7 @@ describe('Recordset', () => {
         it('has the first page of records', async () => {
             const rs = new Recordset({}, numberNamesServerSide);
             rs.pageSize = 3;
-            await nextFrame();
+            await rs.updating;
             expect(rs.currentPage.map(r => r.values.name)).toEqual(['one', 'two', 'three']);
         });
 
@@ -188,7 +189,7 @@ describe('Recordset', () => {
             rs.pageSize = 3;
             rs.pageNumber = 2;
 
-            await nextFrame();
+            await rs.updating;
             expect(rs.currentPage.map(r => r.values.name)).toEqual(['four', 'five', 'six']);
         });
 
@@ -196,7 +197,7 @@ describe('Recordset', () => {
             const rs = new Recordset({}, numberNamesServerSide);
             rs.pageSize = 5;
             rs.pageNumber = 3;
-            await nextFrame();
+            await rs.updating;
             expect(rs.currentPage.map(r => r.values.name)).toEqual(['eleven', 'twelve']);
         });
     });
@@ -207,7 +208,7 @@ describe('Recordset', () => {
             rs.filter = record => record.values.name.includes('e');
             rs.pageSize = 2;
             rs.pageNumber = 2;
-            await nextFrame();
+            await rs.updating;
             expect(rs.currentPage.map(r => r.values.name)).toEqual(['five', 'seven']);
         });
         it('sets the page to 1 after filtering', async () => {
@@ -226,7 +227,7 @@ describe('Recordset', () => {
             rs.sortColumns = [{ field: 'name', sort: 'ascending' }];
             rs.pageSize = 2;
             rs.pageNumber = 2;
-            await nextFrame();
+            await rs.updating;
             expect(rs.currentPage.map(r => r.values.name)).toEqual(['five', 'four']);
         });
         it('sets the page to 1 after sorting', async () => {
@@ -241,26 +242,19 @@ describe('Recordset', () => {
 
     describe('requestUpdate()', () => {
         it('only updates once per event loop', async () => {
-            let sequence = '';
-            async function defer() {
-                sequence += 'd';
-                await nextFrame();
-            }
-
             const rs = new Recordset({}, numberNames);
-            rs.update = () => {
-                sequence += 'u';
-            };
-            rs.requestUpdate();
-            rs.requestUpdate();
-            rs.requestUpdate();
-            await defer();
-            rs.requestUpdate();
-            rs.requestUpdate();
-            rs.requestUpdate();
-            await defer();
+            const updateSpy = jest.spyOn(rs, 'update');
 
-            expect(sequence).toEqual('dudu'); // cSpell:disable-line
+            rs.requestUpdate();
+            rs.requestUpdate();
+            rs.requestUpdate();
+            await nextFrame();
+            rs.requestUpdate();
+            rs.requestUpdate();
+            rs.requestUpdate();
+            await nextFrame();
+
+            expect(updateSpy).toHaveBeenCalledTimes(2); // cSpell:disable-line
         });
     });
 
@@ -288,26 +282,33 @@ describe('Recordset', () => {
 
     describe('events', () => {
         it('fires a page-changed event after updating the list of records on the current page', async () => {
-            let timesChangeFired = 0;
-            let timesPageChangeFired = 0;
+            const changedSpy = jest.fn();
+            const pageChangedSpy = jest.fn();
+            const callCount = 5;
             const rs = new Recordset({}, numberNames);
-            rs.addEventListener('page-changed', () => timesPageChangeFired++);
-            rs.addEventListener('change', () => timesChangeFired++);
-            rs.pageNumber = 1;
-            await nextFrame();
-            rs.pageSize = 5;
-            await nextFrame();
-            rs.filter = () => true;
-            await nextFrame();
-            rs.sortColumns = [];
-            await nextFrame();
-            rs.parameters = {};
-            await nextFrame();
 
-            expect(timesPageChangeFired).toEqual(5);
+            rs.addEventListener('page-changed', pageChangedSpy);
+            rs.addEventListener('change', changedSpy);
+
+            rs.pageNumber = 1;
+            await rs.updating;
+
+            rs.pageSize = 5;
+            await rs.updating;
+
+            rs.filter = () => true;
+            await rs.updating;
+
+            rs.sortColumns = [];
+            await rs.updating;
+
+            rs.parameters = {};
+            await rs.updating;
+
+            expect(pageChangedSpy).toHaveBeenCalledTimes(callCount);
 
             // The "change" event is needed for backwards-compatibility
-            expect(timesChangeFired).toEqual(timesPageChangeFired);
+            expect(changedSpy).toHaveBeenCalledTimes(callCount);
         });
 
         it('fires a loading event when standard and hard updates are requested, not on soft updates', async () => {
@@ -372,35 +373,35 @@ describe('Recordset', () => {
         });
 
         it('fires a counts-changed event after any change that could change the count of selected / invalid / matching records', async () => {
-            let timesCountsChangeFired = 0;
             const rs = new Recordset({}, numberNames);
-            rs.addEventListener('counts-changed', () => timesCountsChangeFired++);
+            const countsChangedSpy = jest.fn();
+
+            rs.addEventListener('counts-changed', countsChangedSpy);
+
             rs.pageNumber = 1;
-            await nextFrame();
-            expect(timesCountsChangeFired).toEqual(1);
+            await rs.updating;
+
             rs.pageSize = 5;
-            await nextFrame();
-            expect(timesCountsChangeFired).toEqual(2);
+            await rs.updating;
+
             rs.filter = () => true;
-            await nextFrame();
-            expect(timesCountsChangeFired).toEqual(3);
+            await rs.updating;
+
             rs.sortColumns = [];
-            await nextFrame();
-            expect(timesCountsChangeFired).toEqual(4);
+            await rs.updating;
+
             rs.parameters = {};
-            await nextFrame();
-            expect(timesCountsChangeFired).toEqual(5);
+            await rs.updating;
+
+            // the below methods don't trigger updates so should not be awaited
             rs.currentPage[0].setField('name', 'uno');
-            await nextFrame();
-            expect(timesCountsChangeFired).toEqual(6);
+
             const oneRecord = rs.currentPage[0];
             rs.deleteRecord(oneRecord);
-            await nextFrame();
-            expect(timesCountsChangeFired).toEqual(7);
             rs.insertRecord(oneRecord);
-            await nextFrame();
-            expect(timesCountsChangeFired).toEqual(8);
-        });
+
+            expect(countsChangedSpy).toHaveBeenCalledTimes(8);
+        }, 5000);
     });
 
     describe('adding and removing records', () => {
@@ -409,7 +410,7 @@ describe('Recordset', () => {
             const rs = new Recordset({ name: numberName }, numberNames);
             rs.pageSize = 5;
             rs.pageNumber = 3;
-            await nextFrame();
+            await rs.updating;
             rs.appendRecord();
             expect(rs.totalCount).toEqual(13);
             expect(rs.currentPage[2].getField('name')).toEqual('zero');
@@ -420,11 +421,17 @@ describe('Recordset', () => {
             const rs = new Recordset({ name: numberName }, numberNames);
             rs.pageSize = 5;
             rs.pageNumber = 1;
-            await nextFrame();
+            await rs.updating;
             const two = rs.currentPage[1];
-            rs.cloneRecord(two, 1, ['name']);
+            const clonedRecord = rs.cloneRecord(two, 1, ['name']);
             expect(rs.totalCount).toEqual(13);
             expect(rs.currentPage[2].getField('name')).toEqual('two');
+            let updatedRecord;
+            rs.addEventListener('updated', ({ detail }) => {
+                updatedRecord = detail.record;
+            });
+            clonedRecord.setField('name', 'two-clone');
+            expect(updatedRecord).toBeTruthy();
         });
 
         it('temporarily increases the size of the page when a new record is added', async () => {
@@ -432,7 +439,7 @@ describe('Recordset', () => {
             const rs = new Recordset({ name: numberName }, numberNames);
             rs.pageSize = 5;
             rs.pageNumber = 1;
-            await nextFrame();
+            await rs.updating;
             const two = rs.currentPage[1];
             rs.cloneRecord(two, 1, ['name']);
             rs.cloneRecord(two, 1, ['name']);
@@ -452,7 +459,7 @@ describe('Recordset', () => {
             const rs = new Recordset({ name: numberName }, numberNames);
             rs.pageSize = 5;
             rs.pageNumber = 1;
-            await nextFrame();
+            await rs.updating;
             const secondRecord = rs._.sortedFilteredRecords[1];
             rs.deleteRecord(secondRecord);
             expect(rs.totalCount).toEqual(11);
@@ -478,7 +485,7 @@ describe('Recordset', () => {
             ]);
             rs.pageNumber = 1;
             rs.pageSize = 3;
-            await nextFrame();
+            await rs.updating;
             rs.setColumnValue('letter', 'x');
 
             expect(rs._.records.map(record => record.values.letter)).toEqual(['x', 'x', 'a']);
@@ -487,7 +494,7 @@ describe('Recordset', () => {
         it('allRecordsMatch(field, value)', async () => {
             const rs = new Recordset({}, numberNames);
             rs.filter = record => record.getField('value') > 6;
-            await nextFrame();
+            await rs.updating;
             expect(rs.allRecordsMatch('name', 'one')).toEqual(false);
             expect(rs.allRecordsMatch('isANumber', true)).toEqual(true);
             expect(rs.allRecordsMatch('isANumber', false)).toEqual(false);
@@ -496,7 +503,7 @@ describe('Recordset', () => {
         it('noRecordsMatch(field, value)', async () => {
             const rs = new Recordset({}, numberNames);
             rs.filter = record => record.getField('value') > 6;
-            await nextFrame();
+            await rs.updating;
             expect(rs.noRecordsMatch('name', 'ten')).toEqual(false);
             expect(rs.noRecordsMatch('name', 'one')).toEqual(true);
         });
@@ -504,7 +511,7 @@ describe('Recordset', () => {
         it('partialRecordsMatch(field, value)', async () => {
             const rs = new Recordset({}, numberNames);
             rs.filter = record => record.getField('value') > 6;
-            await nextFrame();
+            await rs.updating;
             expect(rs.partialRecordsMatch('name', 'ten')).toEqual(true);
             expect(rs.partialRecordsMatch('name', 'one')).toEqual(false);
         });
@@ -512,7 +519,7 @@ describe('Recordset', () => {
         it('recordsMatching(field, value)', async () => {
             const rs = new Recordset({}, numberNames);
             rs.filter = record => record.getField('value') > 6;
-            await nextFrame();
+            await rs.updating;
             expect(pluck(rs.recordsMatching('isEven', true), 'name')).toEqual([
                 'eight',
                 'ten',
@@ -522,13 +529,27 @@ describe('Recordset', () => {
 
         it('countRecordsMatching(field, value)', async () => {
             const rs = new Recordset({}, numberNames);
+
             rs.filter = record => record.getField('value') > 6;
-            await nextFrame();
+            await rs.updating;
             expect(rs.countRecordsMatching('isEven', true)).toEqual(3);
         });
     });
 
     describe('validation', () => {
+        it('accepts a validator', async () => {
+            const rs = new Recordset(
+                { name: new FieldType(), value: new FieldType() },
+                numberNames
+            );
+            await rs.requestUpdate();
+            rs.addValidator({
+                name: 'must have a record with a value of 13',
+                validate: records => records.some(record => record.getField('value') === 13),
+            });
+            expect(rs.isValid()).toEqual(false);
+            expect(rs.errors()).toEqual(['must have a record with a value of 13']);
+        });
         it('counts the invalid records', async () => {
             const disallowVowels = new FieldType().with.validator({
                 name: 'no-vowel',
@@ -539,9 +560,11 @@ describe('Recordset', () => {
                 { letter: 'b' },
                 { letter: 'c' },
             ]);
+
             rs.pageNumber = 1;
             rs.pageSize = 3;
-            await nextFrame();
+
+            await rs.updating;
 
             expect(rs.invalidRecordCount()).toEqual(1);
         });
@@ -598,6 +621,19 @@ describe('Recordset', () => {
                     value: 'ω',
                 },
             ]);
+        });
+        it('It knows when a record has changed', async () => {
+            const rs = new Recordset({}, numberNames);
+
+            rs.pageNumber = 1;
+            rs.pageSize = 3;
+            expect(rs.hasChanged).toEqual(false);
+
+            await rs.updating;
+
+            const record = rs.currentPage[0];
+            record.values.name = 'bobby';
+            expect(rs.hasChanged).toEqual(true);
         });
     });
 });

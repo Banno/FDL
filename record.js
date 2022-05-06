@@ -1,21 +1,37 @@
-import clone from './helpers/clone.js';
+/* eslint-disable @treasury/filename-match-export */
+// TODO rename this file to record.js (lowercase)
+
+import { clone, deepEquals } from '@treasury/utils';
 import FieldType from './field-type.js';
 import Field from './field.js';
 
+/**
+ * @template [T = unknown]
+ */
 export default class Record extends EventTarget {
     /**
-     *
-     * @param {Array<FieldType>} fieldTypes
-     * @param {*} values
+     * @param {Object.<string, FieldType>} fieldTypes
+     * @param {T} values
      */
     constructor(fieldTypes, values) {
         super();
         this.cachedFields = {};
         this.fieldTypes = fieldTypes;
+        /**
+         * The backing object used to hydrate the record.
+         * @type {T}
+         * @public
+         */
         this.values =
             values || console.error('You are passing undefined values', fieldTypes, values);
         this.initialValues = clone(values);
         this.listeners = {};
+        /** @type {boolean} View model property used by <omega-table> to track detail row state. */
+        this.isExpanded = false;
+    }
+
+    get hasChanged() {
+        return !deepEquals(this.initialValues, this.values);
     }
 
     /**
@@ -30,7 +46,7 @@ export default class Record extends EventTarget {
     /**
      *
      * @param {string} field
-     * @param {number} index
+     * @param {number} [index]
      */
     print(field, index) {
         const value = index === undefined ? this.getField(field) : this.getField(field)[index];
@@ -60,15 +76,23 @@ export default class Record extends EventTarget {
 
     /**
      *
-     * @param {Field} field
+     * @param {string} field
      */
     announceChange(field) {
         this.dispatchEvent(new CustomEvent('change', { detail: { field } }));
     }
 
+    /**
+     *
+     * @param {string} field
+     */
+    announceBlur(field) {
+        this.dispatchEvent(new CustomEvent('blur', { detail: { field } }));
+    }
+
     errors() {
         return Object.keys(this.values).map(key => {
-            if (this.fieldTypeForField(key).hasParts()) {
+            if (this.fieldTypeForField(key).hasParts) {
                 return this.fieldTypeForField(key)
                     .parts()
                     .map(part =>
@@ -93,17 +117,48 @@ export default class Record extends EventTarget {
         return this.errorCount() > 0;
     }
 
+    readableRecordErrors() {
+        const fieldValidationErrors = Object.keys(this.values).map(key => {
+            if (this.fieldTypeForField(key).hasParts) {
+                return this.fieldTypeForField(key)
+                    .parts()
+                    .map(part =>
+                        part.type.validate(part.key, this.values[key][part.key], null, this)
+                    );
+            }
+            return this.fieldTypeForField(key)
+                .validate(key, this.values[key], null, this)
+                .map(v => ({ ...v, label: this.fieldTypeForField(key).label(this) }));
+        });
+        return fieldValidationErrors
+            .map(field => field.map(error => `${error.label}: ${error.name}`))
+            .flat();
+    }
+
     /**
      *
-     * @param {string} key
-     * @param {*} value
+     * @param {*} field string
+     * @returns {array}
      */
-    isValid(key, value) {
+    readableFieldErrors(field) {
+        return this.fieldTypeForField(field)
+            .validate(field, this.values[field], null, this)
+            .map(v => ({ ...v, label: this.fieldTypeForField(field).label(this) }))
+            .map(error => `${error.label} ${error.name}`)
+            .flat();
+    }
+
+    /**
+     * Checks the validity of a field based on the fields validators.
+     *
+     * @param {string} [key] Field name string
+     * @param {*} [value] Value for the field, defaults to whatever is in the record.
+     *
+     * @returns {boolean} Returns if the field is valid
+     */
+    isValid(key, value = this.values[key]) {
         if (key) {
-            return (
-                this.fieldTypeForField(key).validate(key, value ?? this.values[key], null, this)
-                    .length === 0
-            );
+            return this.fieldTypeForField(key).validate(key, value, null, this).length === 0;
         }
 
         return !this.hasErrors();
@@ -143,7 +198,7 @@ export default class Record extends EventTarget {
 
             const parentFieldType = this.fieldTypes[parent];
 
-            if (parentFieldType.hasParts()) {
+            if (parentFieldType.hasParts) {
                 return this.fieldTypes[parent].parts().find(p => p.key === child).type;
             }
             return this.fieldTypeForField(parent);
@@ -159,17 +214,31 @@ export default class Record extends EventTarget {
 
     /**
      *
-     * @param {string} field
-     * @param {*} value
+     * @template {keyof T} R
+     * @param  {R} field
+     * @param {T[R]} value
      */
     setField(field, value) {
+        /** @type { string[] }  */
         const parts = field.split('.');
         let target = this.values;
+
         while (parts.length > 1) {
             target = target[parts.shift()];
         }
+
         target[parts.shift()] = value;
         this.announceChange(field);
+    }
+
+    /**
+     *
+     * @param {object} fields
+     */
+    setFields(fields) {
+        Object.keys(fields).forEach(field => {
+            this.setField(field, fields[field]);
+        });
     }
 
     /**
@@ -183,7 +252,9 @@ export default class Record extends EventTarget {
 
     /**
      * Gets the value of a field
-     * @param {string} field
+     * @template {keyof T} R
+     * @param {R} field
+     * @returns {T[R]}
      */
     getField(field) {
         const parts = field.split('.');
@@ -212,6 +283,15 @@ export default class Record extends EventTarget {
         Object.keys(this.values).map(field => this.announceChange(field));
     }
 
+    clear() {
+        const defaultValues = {};
+        for (const [key, value] of Object.entries(this.fieldTypes)) {
+            defaultValues[key] = value.defaultValue();
+        }
+        this.values = defaultValues;
+        Object.keys(this.values).forEach(field => this.announceChange(field));
+    }
+
     allowInputChar(field, char) {
         return this.fieldTypeForField(field).allowInputChar(char);
     }
@@ -229,17 +309,30 @@ export default class Record extends EventTarget {
 
     /**
      *
-     * @param {*} fields
+     * @param {(keyof T)[]} [fields]
      * @returns {Record}
      */
     clone(fields) {
-        const fieldsToClone = fields ?? Object.keys(this.fieldTypes);
-        const clonedValues = Object.fromEntries(
-            Object.entries(this.values).map(([field, value]) => {
-                if (fieldsToClone.includes(field)) return [field, value];
-                return [field, this.fieldTypeForField(field).defaultValue()];
-            })
-        );
+        /** @type {T} */
+        let clonedValues;
+        const proto = Object.getPrototypeOf(this.values);
+
+        // treat POJOs as simple objects
+        if (proto.constructor === Object) {
+            const fieldsToClone = fields ?? Object.keys(this.fieldTypes);
+            const entries = Object.entries(this.values).map(([fieldName, value]) => {
+                if (!fieldsToClone.includes(fieldName)) {
+                    value = this.fieldTypeForField(fieldName).defaultValue();
+                }
+
+                return [fieldName, value];
+            });
+            clonedValues = Object.fromEntries(entries);
+        }
+        // support class instances stored in records
+        else {
+            clonedValues = clone(this.values);
+        }
 
         return new Record(this.fieldTypes, clonedValues);
     }

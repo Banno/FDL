@@ -83,42 +83,6 @@ describe('FieldType', () => {
                 },
             ]);
         });
-
-        it('creates an Angular validator', () => {
-            const validators = accountNumber.angularValidators(invalidRecord, options);
-            expect(validators['bad-account-type']('2222', '2222')).toEqual(true);
-            expect(validators['bad-account-type']('1111', '1111')).toEqual(false);
-        });
-
-        it('creates an async validator', async () => {
-            const accountNumber2 = new FieldType().with.asyncValidator(
-                badAccountTypeAsyncValidator
-            );
-            const validators = accountNumber2.asyncAngularValidators(invalidRecord, options);
-
-            expect(await validators['bad-account-type']('2222', '2222')).toEqual(true);
-            expect(await validators['bad-account-type']('1111', '1111')).toEqual(false);
-        });
-
-        it('extension', () => {
-            const x = new FieldType().with.validator({ name: 'x' });
-            const y = x.with.validator({ name: 'y' });
-
-            expect([
-                Object.keys(x.angularValidators()),
-                Object.keys(y.angularValidators()),
-            ]).toEqual([['x'], ['x', 'y']]);
-        });
-
-        it('extension (async)', () => {
-            const x = new FieldType().with.asyncValidator({ name: 'x' });
-            const y = x.with.asyncValidator({ name: 'y' });
-
-            expect([
-                Object.keys(x.asyncAngularValidators()),
-                Object.keys(y.asyncAngularValidators()),
-            ]).toEqual([['x'], ['x', 'y']]);
-        });
     });
 
     describe('with.formatter', () => {
@@ -335,70 +299,6 @@ describe('FieldType', () => {
         it('can be set to a string value', () => {
             const address = new FieldType().with.schema('address');
             expect(address.schema()).toEqual('address');
-        });
-    });
-
-    describe('suggestions(fn, style)', () => {
-        it('hasSuggestions', () => {
-            const a = new FieldType();
-            const b = new FieldType().with.suggestions(() => []);
-            expect([a.hasSuggestions(), b.hasSuggestions()]).toEqual([false, true]);
-        });
-
-        it('returns a promise when the function does not return a promise', done => {
-            function suggester(text) {
-                return [text, 'other'];
-            }
-
-            const accounts = new FieldType().with.suggestions(suggester, 'dummy');
-            accounts.suggestions('needle').then(result => {
-                expect(result).toEqual(['needle', 'other']);
-                done();
-            });
-        });
-
-        it('returns a promise when the function returns a promise', done => {
-            function suggester(text) {
-                return Promise.resolve([text, 'other']);
-            }
-
-            const accounts = new FieldType().with.suggestions(suggester, 'dummy');
-            accounts.suggestions('needle').then(result => {
-                expect(result).toEqual(['needle', 'other']);
-                done();
-            });
-        });
-    });
-
-    describe('lookup(fn, style)', () => {
-        it('hasLookup', () => {
-            const a = new FieldType();
-            const b = new FieldType().with.lookup(() => []);
-            expect([a.hasLookup(), b.hasLookup()]).toEqual([false, true]);
-        });
-
-        it('returns a promise', done => {
-            function doLookup(text) {
-                return Promise.resolve(`echo ${text}`);
-            }
-
-            const accounts = new FieldType().with.lookup(doLookup);
-            accounts.lookup('needle').then(result => {
-                expect(result).toEqual('echo needle');
-                done();
-            });
-        });
-
-        it('returns a promise even if the return value is not a promise', done => {
-            function doLookup(text) {
-                return `echo ${text}`;
-            }
-
-            const accounts = new FieldType().with.lookup(doLookup);
-            accounts.lookup('needle').then(result => {
-                expect(result).toEqual('echo needle');
-                done();
-            });
         });
     });
 
@@ -798,13 +698,13 @@ describe('FieldType', () => {
         });
         it('adds a validator for min length', () => {
             const minLengthValidator = field.properties.validators.find(
-                validator => validator.name === 'min-length'
+                validator => validator.name === `minimum length is ${3}`
             );
             expect(minLengthValidator).toBeTruthy();
         });
         it('adds a validator for max length', () => {
             const maxLengthValidator = field.properties.validators.find(
-                validator => validator.name === 'max-length'
+                validator => validator.name === `maximum length is ${10}`
             );
             expect(maxLengthValidator).toBeTruthy();
         });
@@ -832,6 +732,8 @@ describe('FieldType', () => {
             emptyField = new FieldType().with.defaultValue(null);
             expect(emptyField.empty()).toBe(true);
             emptyField = new FieldType().with.defaultValue(undefined);
+            expect(emptyField.empty()).toBe(true);
+            emptyField = new FieldType().with.defaultValue('    ');
             expect(emptyField.empty()).toBe(true);
         });
     });
@@ -900,5 +802,71 @@ describe('FieldType', () => {
             ])
             .thatHas.hashFunction(item => item?.id);
         expect(withHashAndOptions.properties.hashFunction({ name: 'Ben', id: 0 })).toEqual(0);
+    });
+
+    describe('iconMessage', () => {
+        it('iconMessage as string', () => {
+            const a = new FieldType();
+            const b = a.with.iconMessage('some message');
+            expect(b.properties.iconMessage).toEqual('some message');
+        });
+
+        it('iconMessage as object', () => {
+            const messageSettings = {
+                message: 'some message',
+                direction: 'bottom',
+                light: true,
+            };
+            const a = new FieldType();
+            const b = a.with.iconMessage(messageSettings);
+            expect(b.properties.iconMessage).toEqual(messageSettings);
+        });
+    });
+    describe('onValueChange', () => {
+        let user;
+        let record;
+        let id;
+        beforeEach(() => {
+            user = new FieldType();
+            id = new FieldType().with.onValueChange(r => {
+                const u = r.getField('user');
+                record.setField('id', u?.id);
+            });
+            record = new Record(
+                { user, id },
+                { user: { name: 'Ben', id: 5678, company: 'Test' }, id: 1234 }
+            );
+        });
+        it('uses onValueChange to react to field changes', () => {
+            record.setField('user', { name: 'Aaron', id: 999, company: 'Test' });
+            id.onValueChange(record);
+            expect(record.getField('id')).toEqual(999);
+        });
+    });
+
+    describe('tag', () => {
+        it('has a default input tag', () => {
+            const field = new FieldType();
+            expect(field.tag()).toEqual('input');
+        });
+        it('sets a tag property', () => {
+            const field = new FieldType().with.tag('select');
+            expect(field.tag()).toEqual('select');
+        });
+    });
+
+    describe('type', () => {
+        it('has a default input type', () => {
+            const field = new FieldType();
+            expect(field.type()).toEqual('text');
+        });
+        it('sets a type property', () => {
+            const field = new FieldType().with.type('number');
+            expect(field.type()).toEqual('number');
+        });
+        it('throws an error if if the type provided is not valid', () => {
+            const field = new FieldType().with.type('invalid');
+            expect(field.type()).toEqual(new Error('Invalid input type: invalid'));
+        });
     });
 });

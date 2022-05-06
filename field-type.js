@@ -1,117 +1,56 @@
-import FieldTypeBuilder from './field-type-builder.js';
+/* eslint-disable import/extensions */
+import FieldTypeBuilder, { defaultProperties } from './field-type-builder';
+import { inputTypes } from './types/input-types.types';
 
 function functionHasNoArguments(f) {
     return f.length === 0;
 }
 
-function isEmptyDefault(value) {
-    return value == null || value === '';
-}
-
+/**
+ * @template [T = unknown]
+ * Provides a fluent-API for building field validators used within FDL forms.
+ */
 // eslint-disable-next-line @treasury/filename-match-export
 export default class FieldType {
-    constructor(properties) {
-        this.properties = properties || {
-            schema: 'simple',
-            type: null,
-            validators: [],
-            asyncValidators: [],
-            formatters: [],
-            template: s => s,
-            formElement: null,
-            parsers: [],
-            cellClasses: [],
-            conditionalCellClasses: [],
-            rowClassFunctions: [],
-            compareFunction(a, b) {
-                if (a < b) {
-                    return -1;
-                }
-
-                if (a > b) {
-                    return 1;
-                }
-
-                return 0;
-            },
-            hashFunction(a) {
-                return a;
-            },
-            aggregate() {
-                return '';
-            },
-            minColumnWidth: 30,
-            maxColumnWidth: 500,
-            sortable: true,
-            required: false,
-            visible: true,
-            readonly: false,
-            inline: false,
-            segmented: false,
-            /*
-                function that takes text and returns an array, optionally
-                wrapped in a promise
-
-                each element in the array an object with two keys
-
-                1. value
-                2. either text (escape) or html (do not escape)
-            */
-            suggestion: null,
-            /*
-                lookup takes a function with one optional argument, text
-                The function returns a value optionally wrapped in a promise
-                The function is responsible for opening a dialog and / or whatever
-                else it takes to complete the lookup use case
-            */
-            lookup: null,
-            labelFunctions: [],
-            search: false,
-            options: null,
-            hasMultipleValues: false,
-            minValueCount: 1,
-            maxValueCount: 1,
-            minLength: 0,
-            // https://www.w3schools.com/tags/att_input_maxlength.asp
-            maxLength: 524288,
-            disableFunctions: [() => false],
-            exampleValue(index) {
-                return index;
-            },
-            inlineFunctions: [() => false],
-            requiredFunctions: [() => false],
-            visibleFunctions: [() => true],
-            readonlyFunctions: [() => false],
-            segmentedFunctions: [() => false],
-            range: false,
-            parseDynamicRange: false,
-            placeholder: '',
-            filter() {
-                return true;
-            },
-            allowInputChar() {
-                return true;
-            },
-            selectionDisabledFunctions: {},
-            numberOfRows: 1,
-            toggle: false,
-            descriptions: [],
-            emptyFunctions: [isEmptyDefault],
-            selectOnFocus: false,
-            textAlign: 'left',
-        };
+    /**
+     *
+     * @param { Properties } properties
+     */
+    constructor(properties = null) {
+        this.properties = properties ?? defaultProperties;
         this._validators = [];
+        /** @type {FieldTypeBuilder<T>} */
         this.with = new FieldTypeBuilder(this.properties, FieldType);
+        /** @type {FieldTypeBuilder<T>} */
         this.and = this.with;
+        /** @type {FieldTypeBuilder<T>} */
         this.thatIs = this.and;
+        /** @type {FieldTypeBuilder<T>} */
         this.thatHas = this.thatIs;
+        /** @type {FieldTypeBuilder<T>} */
         this.andIs = this.thatIs;
+        this.as = this.andIs;
+        this.thatWill = this.as;
+        this.thatUses = this.thatWill;
+        this.that = this.thatUses;
         this.resultsText = {};
         this.loaded = Promise.resolve(null);
     }
 
-    hasParts() {
+    get hasParts() {
         return false;
+    }
+
+    accept() {
+        return this.properties.accept;
+    }
+
+    autocomplete() {
+        return this.properties.autocomplete;
+    }
+
+    autofocus() {
+        return this.properties.autofocus;
     }
 
     cellClasses(value) {
@@ -173,47 +112,6 @@ export default class FieldType {
         return this.properties.aggregate(values);
     }
 
-    /**
-     *
-     * @param {Record} record
-     * @param {*} options
-     * @returns
-     */
-    angularValidators(record, options) {
-        const validators = {};
-
-        this.properties.validators.forEach(v => {
-            validators[v.name] = (modelValue, viewValue) =>
-                // This should probably be added.
-                // record[ERRORS] = record[ERRORS] || {};
-                // record[ERRORS][field] = errors;
-                v.validate(modelValue, viewValue, record, options);
-        });
-
-        return validators;
-    }
-
-    /**
-     *
-     * @param {Record} record
-     * @param {*} options
-     * @returns
-     */
-    asyncAngularValidators(record, options) {
-        const validators = {};
-
-        // eslint-disable-next-line sonarjs/no-identical-functions
-        this.properties.asyncValidators.forEach(v => {
-            validators[v.name] = (modelValue, viewValue) =>
-                // This should probably be added.
-                // record[ERRORS] = record[ERRORS] || {};
-                // record[ERRORS][field] = errors;
-                v.validate(modelValue, viewValue, record, options);
-        });
-
-        return validators;
-    }
-
     validate(field, modelValue, viewValue, record, options) {
         /* eslint-disable no-param-reassign */
         const errors = [];
@@ -238,15 +136,23 @@ export default class FieldType {
             return this.properties.defaultValue || 'all';
         }
         if (this.schema() === 'range') {
-            return ['range', 0, 100];
+            return this.properties.defaultValue || ['range', 0, 0];
         }
         if (value !== null && value !== undefined) {
             return value;
         }
-        if (this.properties.defaultValue || this.properties.defaultValue === 0) {
+        if (
+            this.properties.defaultValue ||
+            this.properties.defaultValue === 0 ||
+            this.properties.defaultValue === false
+        ) {
             return this.properties.defaultValue;
         }
         return '';
+    }
+
+    list() {
+        return this.properties.list;
     }
 
     exampleValue() {
@@ -258,19 +164,13 @@ export default class FieldType {
     }
 
     type() {
+        if (!inputTypes.includes(this.properties.type))
+            return new Error(`Invalid input type: ${this.properties.type}`);
         return this.properties.type;
     }
 
-    hasSuggestions() {
-        return !!this.properties.suggestion;
-    }
-
-    suggestions(text) {
-        return Promise.resolve(this.properties.suggestion(text));
-    }
-
-    lookup(text) {
-        return Promise.resolve(this.properties.lookup(text));
+    tag() {
+        return this.properties.tag;
     }
 
     label(record) {
@@ -278,6 +178,10 @@ export default class FieldType {
             (labelSoFar, fn) => fn(record, labelSoFar),
             ''
         );
+    }
+
+    iconMessage() {
+        return this.properties.iconMessage;
     }
 
     search() {
@@ -296,10 +200,6 @@ export default class FieldType {
         return !!this.properties.options;
     }
 
-    hasLookup() {
-        return !!this.properties.lookup;
-    }
-
     hasFilter() {
         return !!this.properties.filtering;
     }
@@ -311,35 +211,45 @@ export default class FieldType {
 
     fetchOptions(record) {
         const { options } = this.properties;
-        const { cache } = options;
+        const { cache, noCache } = options;
         const hash = record?.hashOfFields(this.properties.options.fields);
-        if (cache && cache.hash === hash) {
+
+        if (cache && cache.hash === hash && !noCache) {
             return cache.results;
         }
 
-        if (cache && functionHasNoArguments(options.fetch)) {
+        if (cache && functionHasNoArguments(options.fetch) && !noCache) {
             return cache.results;
         }
 
-        const results = options?.fetch(record).then(data => {
-            if (this.properties.schema === 'datepicker') {
-                return data;
+        let results = [];
+        if (typeof options?.fetch === 'function') {
+            let p = options?.fetch(record);
+
+            if (!(p instanceof Promise)) {
+                p = Promise.resolve(p);
             }
-            return this.filterOptions(this.sortOptions(this.mapOptions(data)), record);
-        });
-        options.cache = {
-            hash,
-            results,
-        };
 
-        results.then(fetchData => {
-            fetchData.forEach(result => {
-                if (typeof result.value !== 'object') {
-                    this.resultsText[JSON.stringify(result.value)] = result.text;
+            results = p.then(data => {
+                if (this.properties.schema === 'datepicker') {
+                    return data;
                 }
+                return this.filterOptions(this.sortOptions(this.mapOptions(data)), record);
             });
-        });
-        this.loaded = results;
+            options.cache = {
+                hash,
+                results,
+            };
+
+            results.then(fetchData => {
+                fetchData.forEach(result => {
+                    if (typeof result.value !== 'object') {
+                        this.resultsText[JSON.stringify(result.value)] = result.text;
+                    }
+                });
+            });
+            this.loaded = results;
+        }
         return results;
     }
 
@@ -354,6 +264,7 @@ export default class FieldType {
     }
 
     mapOptions(options) {
+        if (!Array.isArray(options)) return [];
         return options.map(
             this.mapTextValue(this.properties.options.text, this.properties.options.value)
         );
@@ -393,6 +304,10 @@ export default class FieldType {
         return this.properties.maxValueCount;
     }
 
+    max() {
+        return this.properties.max;
+    }
+
     isDisabled(record) {
         return this.properties.disableFunctions.some(fn => fn(record));
     }
@@ -429,6 +344,10 @@ export default class FieldType {
         return this.properties.requiredFunctions.some(fn => fn(record));
     }
 
+    onValueChange(record) {
+        return this.properties.onValueChange.forEach(fn => fn(record));
+    }
+
     visible(record) {
         return this.properties.visibleFunctions.every(fn => fn(record));
     }
@@ -439,6 +358,10 @@ export default class FieldType {
 
     readonly(record) {
         return this.properties.readonlyFunctions.some(fn => fn(record));
+    }
+
+    readonlyexception(record) {
+        return this.properties.readonlyexceptionFunctions.some(fn => fn(record));
     }
 
     inline(record) {
@@ -457,6 +380,10 @@ export default class FieldType {
         return this.properties.placeholder;
     }
 
+    pattern() {
+        return this.properties.pattern;
+    }
+
     toggle() {
         return this.properties.toggle;
     }
@@ -473,8 +400,36 @@ export default class FieldType {
         return this.properties.selectOnFocus;
     }
 
+    formatOnChange() {
+        return this.properties.formatOnChange;
+    }
+
     textAlign() {
         return this.properties.textAlign;
+    }
+
+    field() {
+        return this.properties.field;
+    }
+
+    additionalProperties() {
+        return this.properties.additionalProperties;
+    }
+
+    step() {
+        return this.properties.step;
+    }
+
+    hashFunction() {
+        return this.properties.hashFunction;
+    }
+
+    hideLabel() {
+        return this.properties.hideLabel;
+    }
+
+    usesCustomPrint() {
+        return this.properties.usesCustomPrint;
     }
 }
 
